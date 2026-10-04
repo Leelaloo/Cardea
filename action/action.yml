@@ -8,7 +8,7 @@ inputs:
   ref:
     description: 'Git ref of the Cardea repo to use'
     required: false
-    default: 'main'
+    default: 'master'
   fail-on-critical:
     description: 'Fail the job if the skill is DO-NOT-INSTALL'
     required: false
@@ -19,7 +19,7 @@ runs:
     - name: Fetch Cardea
       uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0 (SHA-pinned: mutable tags are a supply-chain risk)
       with:
-        repository: 'Leelaloo/cardea'   # TODO: replace OWNER when the repo is live
+        repository: 'Leelaloo/Cardea'
         ref: '${{ inputs.ref }}'
         path: '${{ runner.temp }}/cardea-tool'   # runner temp, NOT the workspace: a '.' audit must never scan the tool itself
 
@@ -44,9 +44,11 @@ runs:
           exit 1
         fi
         echo "## Cardea report" >> $GITHUB_STEP_SUMMARY
-        echo '```json' >> $GITHUB_STEP_SUMMARY
-        cat cardea-report.json >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo '````json' >> $GITHUB_STEP_SUMMARY
+        # M3: report content is attacker-influenced (file names, matched snippets).
+        # Collapse any 4+ backtick run to 3 so content can never break the 4-backtick fence.
+        sed -E 's/`{4,}/```/g' cardea-report.json >> $GITHUB_STEP_SUMMARY
+        echo '````' >> $GITHUB_STEP_SUMMARY
         if [ "${FAIL_ON_CRITICAL,,}" = "true" ] && { [ "$rc" = "2" ] || grep -q '"do_not_install": *true' cardea-report.json; }; then
           echo "::error::Cardea: DO NOT INSTALL — critical security finding(s). See the report artifact."
           exit 1

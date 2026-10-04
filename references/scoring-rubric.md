@@ -11,8 +11,9 @@ destructive commands, or a missing/invalid SKILL.md core — defects no install 
 Why severity-weighted (not category-averaged)? One injection pattern is disqualifying even in an
 otherwise beautiful skill; quality issues compound but individually are survivable.
 
-Suppression: authors may append `doctor: allow` to a line to suppress its pattern findings —
-use only for intentional patterns (e.g., a security skill's own detection rules), never to hide real flaws. Auditors should review suppressed lines.
+Suppression: NOT available to scanned skills. `doctor: allow` markers are honored only inside a
+byte-identical copy of Cardea's own pattern library (verified by content hash); any marker found in a
+scanned skill file is itself reported as a HIGH scanner-evasion finding and suppresses nothing.
 
 ## Deduction caps (v0.2.0+)
 

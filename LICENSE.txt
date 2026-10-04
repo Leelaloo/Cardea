@@ -1,0 +1,28 @@
+Cardea Source-Available License
+Copyright (c) 2026 Leelaloo (cardea)
+
+The source code of Cardea is public so you can read, inspect, and
+verify it before running it. You are free to:
+
+  - download, install, and run Cardea, including at work
+  - modify it for your own personal or internal use
+  - fork this repository on GitHub for personal use or to submit a pull request
+
+You may NOT, without prior written permission from the copyright holder:
+
+  - republish, redistribute, repackage, or rehost Cardea (original or
+    modified) on any marketplace, website, repository, or distribution channel
+  - sell it, or sell any product whose value is substantially derived from it
+  - remove or alter this license, the "Scanned by Cardea" badge footer,
+    or any attribution notice
+
+Permission is typically granted on request for reasonable cases such as
+security research, translations, or community forks - just ask.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

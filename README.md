@@ -26,13 +26,8 @@ Skills are just files anyone can publish, and nothing forces them to be safe or 
 
 ## Demo: behind the scenes
 
-<p align="center">
-  <a href="assets/demo/cardea-demo.mp4">
-    <img src="assets/demo/demo-preview.gif" alt="Cardea demo preview" width="640">
-  </a>
-  <br>
-  <b><a href="assets/demo/cardea-demo.mp4">▶ Watch the full demo (79 s)</a></b>
-</p>
+![Cardea demo](https://github.com/user-attachments/assets/1e588b8f-3a72-495c-8e2e-eb17b811d348)
+
 
 The recording is a real audit, not a mockup. It explains what Cardea is and what it checks, walks a benign fixture to a 98/100 EXCELLENT (its one LOW finding: a missing `LICENSE.txt`), then feeds it a deliberately malicious skill that scores 0/100 with the gate tripped on 6 CRITICAL findings, shows the `--fix` dry-run preview, and ends on the SVG badges. Every number on screen is the number Cardea actually wrote to its JSON report at recording time.
 

@@ -1,9 +1,9 @@
 """Prompt-injection & hidden-unicode detection, informed by Snyk ToxicSkills + SkillJect.
 Static only: reads raw bytes, never executes target code.
 
-Supports suppression markers (like bandit's `# nosec`): a line containing
-`doctor: allow` will not be reported — lets skill authors annotate intentional
-patterns in e.g. security-related skills (like this one).
+Suppression markers (`doctor: allow`) are honored ONLY inside a byte-identical
+copy of this pattern library — never in scanned skill files, where any marker is
+reported as a scanner-evasion HIGH (fail-safe: third parties cannot self-certify).
 
 Scans a NORMALIZED copy of the text: NFKC folding (defeats fullwidth/math
 lookalikes), zero-width/bidi char stripping (defeats invisible-character
@@ -11,6 +11,7 @@ splitting), and Cyrillic/Greek homograph folding (defeats lookalike-letter
 obfuscation). Line numbers are preserved because normalization never creates
 or destroys newlines.
 """
+import hashlib
 import os
 import re
 import unicodedata
@@ -84,7 +85,12 @@ PATTERNS = [
     (re.compile(r"(?i)\brm\s+(?:-[a-z0-9\=\-_]+\s+)*(?:-[a-z]*[rf][a-z]*|--recursive|--force)\b(?:\s+(?:-[a-z0-9\=\-_]+\s+)*(?:-[a-z]*[rf][a-z]*|--recursive|--force)\b)?.*?\s+(?:/|~/|\$HOME(?:/\*)?|~(?:/\*)?)(?:\s|$|\*|/)?"), "CRITICAL", "destructive command targeting root/home"),  # doctor: allow
     (re.compile(r"(?i)chmod\s+777"), "LOW", "world-writable permissions — bad hygiene"),  # doctor: allow
     (re.compile(r"(?i)(skip|ignore|bypass)\s+(the\s+)?(security|deep)?[- ]?(scan|audit|check)"), "CRITICAL", "auditor-directed instruction — attempting to steer the scanner itself"),  # doctor: allow
-    (re.compile(r"(?i)(auditor|reviewer)\s+note|pre-?verified|already\s+(verified|approved|scanned)"), "CRITICAL", "trust-claim impersonation — unverifiable 'already verified' claims"),  # doctor: allow
+    (re.compile(r"(?i)(auditor|reviewer)\s+note|pre-?verified|already\s+(verified|approved|scanned)"
+                r"|(?:verified|certified|approved|scanned|audited)\s+by\s+(?:cardea|this|the)\s*(?:scanner|tool|audit)"
+                r"\b|\b(?:this|the)\s+(?:skill|tool|package|repo|assistant|project|plugin|extension)\b[^\n]{0,60}\b(?:is|was|has\s+been)?\s*(?:fully\s+)?(?:verified|certified|audited|approved|scanned)\b"
+                r"|\b(?:this|the)\s+(?:skill|tool|package|repo|assistant|project|plugin|extension)\b[^\n]{0,60}\bsafe\s+to\s+(?:install|use|trust)\b"
+                r"|no\s+need\s+to\s+(?:re-?)?(?:scan|verify|audit|check)"
+                r"|(?:certified|verified)\s+(?:clean|safe)\b"), "CRITICAL", "trust-claim impersonation — unverifiable verification claims"),  # doctor: allow
     (re.compile(r"(?i)verified\s+by\s+(snyk|owasp|anthropic|agensi)"), "HIGH", "false provenance claim — attributing vetting to a real org without proof"),  # doctor: allow
     (re.compile(r"(?i)(download|install|fetch)[^\n]{0,100}(releases/download|\.zip|\.exe|\.dmg|\.bin)[^\n]{0,120}(run|execut)"), "HIGH", "external binary download-and-run instruction — unvetted executable"),  # doctor: allow
     (re.compile(r"(?i)extract[^\n]{0,50}pass(word)?\s*[:=]\s*[`\"']?[a-z0-9]{3,}"), "CRITICAL", "password-protected archive with exposed password — classic trojan delivery"),  # doctor: allow
@@ -119,7 +125,13 @@ PATTERNS = [
 MAX_SCAN_BYTES = 2 * 1024 * 1024
 TEXT_EXTS = {".md", ".py", ".sh", ".bash", ".zsh", ".fish", ".ps1", ".js", ".mjs", ".cjs", ".ts", ".rb", ".php", ".txt", ".json", ".yaml", ".yml", ".toml"}
 ALLOW_MARKER = "doctor: allow"
-SELF_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))  # Cardea package root; markers trusted only inside it
+# v0.2.7: markers are trusted ONLY in a byte-identical copy of this pattern library
+# itself (SHA-256 match). The previous rule trusted every file under the scanner's
+# package root, which let a malicious skill that vendors a copy of Cardea mark its
+# own payload lines and scan itself clean (vendored-scanner bypass, verified PoC).
+# Hash-scoping means suppression exists only where the pattern text itself lives.
+with open(os.path.realpath(__file__), "rb") as _f:
+    TRUSTED_HASH = hashlib.sha256(_f.read()).hexdigest()
 
 
 def collect_text_files(target, cap=500, hard_collect_cap=5000):
@@ -190,10 +202,8 @@ def check(target, log):
         for i, ln in enumerate(text.splitlines()):
             if _normalize_for_scan(ln) != ln:
                 changed_lines.add(i)
-        target_real = os.path.realpath(target)
-        self_real = os.path.realpath(SELF_DIR)
-        trusted_self = (target_real == self_real or target_real.startswith(self_real + os.sep))
-        if not trusted_self and ALLOW_MARKER in text:
+        trusted_self = hashlib.sha256(raw).hexdigest() == TRUSTED_HASH
+        if not trusted_self and any(ln.rstrip().endswith(ALLOW_MARKER) for ln in text.splitlines()):
             log("HIGH", f"file contains suppression marker '{ALLOW_MARKER}' — possible scanner-evasion attempt (ignored)", rel)
         for rx, sev, msg in PATTERNS:
             for m in rx.finditer(norm):

@@ -3,6 +3,9 @@ import os
 import re
 import stat
 
+# scheme URLs (ftp://, git@host:path, mailto:) are external, not package files
+URLISH_RE = re.compile(r'^[a-zA-Z+.-]+://|^git@|^[a-zA-Z]+:[\\w./-]+$')
+
 # patterns like scripts/foo.py, references/bar.md, assets/x.png — incl. backticked mentions
 PATH_RE = re.compile(r"(?:scripts|references|assets|evals)/[\w./-]+\.[A-Za-z0-9]{1,8}")
 EXT_RE = re.compile(r"[\w-]+\.(py|sh|bash|js|ts|rb|md|txt|json|csv|png|jpg|svg|pdf)\b")
@@ -27,19 +30,34 @@ def check(target, log):
             if "<" in cand or ">" in cand or "$" in cand or cand.startswith("~"):
                 continue  # <placeholder>/$VAR/~ tokens are doc templates or env paths, not package files
             cand = cand.replace("\\", "/")  # Windows-style refs normalize to POSIX for checking
+            if URLISH_RE.match(cand):
+                continue  # ftp://, git@host:..., scheme URLs — external, not package files
             if EXT_RE.fullmatch(cand) or ("/" in cand and not cand.startswith("http")):
                 ref = cand.lstrip("./")
                 referenced.add(ref)
                 ref_lines.setdefault(ref, text[: m.start()].count("\n") + 1)
 
     # scripts invoked inside fenced code blocks must be executable; prose mentions need only exist
-    code_blocks = re.findall(r"```\w*\n(.*?)```", text, re.DOTALL)
+    code_blocks = re.findall(r"```[^\n]*\n(.*?)```", text, re.DOTALL)
     invoked = set()
+    direct_invoked = set()  # executed as the command itself -> exec bit required
     for block in code_blocks:
         invoked |= set(PATH_RE.findall(block))
         for m in re.finditer(r"\b(\S+\.(?:py|sh|bash|js|ts|rb))\b", block):
             if "/" not in m.group(1):
                 invoked.add("scripts/" + m.group(1))
+        for line in block.splitlines():
+            stripped = line.strip()
+            # interpreter invocation (python3 scripts/x.py, sh scripts/x.sh): the
+            # interpreter reads the file, so the exec bit is NOT required (v0.2.6 —
+            # GitHub web uploads strip the bit and a python3-run script never needs it)
+            m = re.match(r"^(?:sudo\s+)?(?:env\s+\S+\s+|python3?|node|ruby|php|perl|(?:ba|z)?sh)\s+(?:\./)?((?:scripts)/[\w./-]+\.[A-Za-z0-9]{1,8})", stripped)
+            if m:
+                continue
+            # direct invocation (./scripts/x.sh or scripts/x.sh as the command)
+            m = re.match(r"^(?:sudo\s+)?(?:\./)?((?:scripts)/[\w./-]+\.[A-Za-z0-9]{1,8})(?:\s|$)", stripped)
+            if m:
+                direct_invoked.add(m.group(1))
 
     if re.search(r"\.\.[/\\]", text):
         log("CRITICAL", "path traversal reference (../) in SKILL.md — may read outside the skill folder", "SKILL.md")
@@ -52,7 +70,7 @@ def check(target, log):
         path = os.path.join(target, ref)
         if not os.path.exists(path):
             missing.append(ref)
-        elif ref.startswith(("scripts/",)) and ref in invoked and os.path.isfile(path):
+        elif ref.startswith(("scripts/",)) and ref in direct_invoked and os.path.isfile(path):
             mode = os.stat(path).st_mode
             if not (mode & stat.S_IXUSR or os.access(path, os.X_OK)):
                 non_exec.append(ref)
@@ -75,6 +93,8 @@ def check(target, log):
         for root, dirs, files in os.walk(target):
             dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
             for fn in files:
+                if len(pkg_text) >= 500:  # fail-safe cap: a padded skill cannot stall the orphan scan
+                    break
                 if os.path.splitext(fn)[1].lower() in (".md", ".py", ".sh", ".txt", ".json"):
                     try:
                         with open(os.path.join(root, fn), "r", encoding="utf-8", errors="replace") as fh:

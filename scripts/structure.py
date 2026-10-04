@@ -11,7 +11,10 @@ TRIGGER_HINTS = ("when", "use this", "for tasks", "whenever", "if the user")
 
 
 def parse_frontmatter(text):
-    """Return (fm_dict, body, yaml_error_or_None). Minimal parser; frontmatter assumed flat key: value."""
+    """Return (fm_dict, body, yaml_error_or_None). Deterministic parser: verdicts derive
+    from the stdlib fallback on EVERY host (environment-independent scores); PyYAML,
+    when installed, is consulted only to detect malformed YAML — its values are
+    never used, so a skill scores identically with or without PyYAML present."""
     if not text.startswith("---"):
         return {}, text, None
     try:
@@ -20,14 +23,15 @@ def parse_frontmatter(text):
         return {}, text, None
     block = text[3:end].strip("\n")
     body = text[end + 4:]
-    try:  # robust: handles nested YAML, folded scalars, quoted strings
+    yaml_error = None
+    try:  # cross-check ONLY (never feeds the verdict): detect malformed YAML when PyYAML exists.
         import yaml
         parsed = yaml.safe_load(block)
-        fm = {k: v for k, v in (parsed or {}).items()} if isinstance(parsed, dict) else {}
-        return fm, body, None
+        if not isinstance(parsed, dict):
+            yaml_error = "parsed frontmatter is not a mapping"
     except ImportError:
-        yaml_error = None  # PyYAML absent: simple fallback below (documented stdlib-only behavior)
-    except Exception as e:  # malformed YAML: fall back below, but surface the error to the caller
+        pass  # PyYAML absent: deterministic fallback below is authoritative on every host
+    except Exception as e:  # malformed YAML: surface the error, still parse deterministically below
         yaml_error = f"{type(e).__name__}: {str(e)[:60]}"
     fm, key = {}, None
     for line in block.splitlines():
@@ -65,7 +69,7 @@ def check(target, log):
     if not os.path.isfile(skill_md):
         log("CRITICAL", "SKILL.md missing — this is not a valid skill package", "SKILL.md")
         return
-    with open(skill_md, "r", errors="replace") as f:
+    with open(skill_md, "r", encoding="utf-8-sig", errors="replace") as f:  # strips a UTF-8 BOM (M10): a valid Windows-saved skill must not fail the gate
         text = f.read()
     fm, body, yaml_error = parse_frontmatter(text)
     if yaml_error:
@@ -73,7 +77,7 @@ def check(target, log):
     folder = os.path.basename(os.path.normpath(target))
 
     # name
-    name = fm.get("name", "")
+    name = str(fm.get("name", ""))
     if not name:
         log("CRITICAL", "frontmatter 'name' field missing", "SKILL.md", 1)
     else:
@@ -82,10 +86,13 @@ def check(target, log):
         if not NAME_RE.match(name):
             log("HIGH", f"name '{name}' violates spec (lowercase alphanumerics + single hyphens only)", "SKILL.md")
         if name != folder:
-            log("HIGH", f"name '{name}' does not match folder name '{folder}' (required by spec)", "SKILL.md")
+            if name.lower() == folder.lower():
+                log("LOW", f"name '{name}' differs from folder name '{folder}' only by case — spec wants an exact match (fix with --apply)", "SKILL.md")
+            else:
+                log("HIGH", f"name '{name}' does not match folder name '{folder}' (required by spec)", "SKILL.md")
 
     # description
-    desc = fm.get("description", "")
+    desc = str(fm.get("description", ""))
     if not desc:
         log("CRITICAL", "frontmatter 'description' missing or empty — skill will never trigger", "SKILL.md")
     else:
@@ -111,5 +118,5 @@ def check(target, log):
     unknown = [d for d in entries if os.path.isdir(os.path.join(target, d)) and d not in KNOWN_DIRS]
     if unknown:
         log("LOW", f"non-standard directories: {', '.join(unknown)} (fine, but unconventional)", None)
-    if "LICENSE.txt" not in entries and "LICENSE" not in entries:
+    if not any(e == "LICENSE" or e.startswith("LICENSE.") for e in entries):
         log("LOW", "no LICENSE file — marketplaces and buyers expect one", None)

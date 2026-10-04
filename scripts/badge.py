@@ -31,15 +31,15 @@ def render_badge(score, band_label, do_not_install=False):
     lw, vw = _text_width(label), _text_width(value)
     w = lw + vw
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="20" role="img" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="20" viewBox="0 0 {w} 20" role="img" '
         f'aria-label="{_esc(label)}: {_esc(value)}">'
         f'<title>{_esc(label)}: {_esc(value)}</title>'
-        f'<linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/>'
+        f'<linearGradient id="cardea-grad-{score}" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/>'
         f'<stop offset="1" stop-opacity=".1"/></linearGradient>'
-        f'<clipPath id="r"><rect width="{w}" height="20" rx="3" fill="#fff"/></clipPath>'
-        f'<g clip-path="url(#r)"><rect width="{lw}" height="20" fill="#555"/>'
+        f'<clipPath id="cardea-clip-{score}"><rect width="{w}" height="20" rx="3" fill="#fff"/></clipPath>'
+        f'<g clip-path="url(#cardea-clip-{score})"><rect width="{lw}" height="20" fill="#555"/>'
         f'<rect x="{lw}" width="{vw}" height="20" fill="{color}"/>'
-        f'<rect width="{w}" height="20" fill="url(#s)"/></g>'
+        f'<rect width="{w}" height="20" fill="url(#cardea-grad-{score})"/></g>'
         f'<g fill="#fff" text-anchor="middle" {FONT}>'
         f'<text x="{lw // 2}" y="15">{_esc(label)}</text>'
         f'<text x="{lw + vw // 2}" y="15">{_esc(value)}</text></g></svg>'

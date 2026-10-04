@@ -16,6 +16,34 @@ def _safe_arg(p):
     return p
 
 
+def _safe_relpath(target, p):
+    """Analyzer outputs may contain paths that break os.path.relpath (M2):
+    never let a hostile filename kill the report — fall back to the basename."""
+    try:
+        return os.path.relpath(p, target)
+    except ValueError:
+        return os.path.basename(str(p))
+
+
+def _tool_integrity(name, log):
+    """H2: a PATH-shadowed analyzer (a fake 'bandit' in ~/.local/bin or /tmp) silently
+    produces a clean scan. Record the resolved path; warn loudly when it sits in a
+    user-writable location."""
+    resolved = shutil.which(name)
+    if not resolved:
+        return None
+    home = os.path.expanduser("~")
+    suspicious = (resolved.startswith(home + os.sep) or "/tmp/" in resolved  # nosec B108 (we DETECT /tmp paths, we never create them)
+                  or resolved.startswith("." + os.sep) or os.sep + ".local" + os.sep in resolved)
+    if suspicious:
+        log("HIGH", f"analyzer '{name}' resolved to a user-writable path: {resolved} — possible PATH shadowing; "
+            f"verify the tool's integrity before trusting a clean verdict", None)
+    else:
+        log("INFO", f"analyzer '{name}' resolved: {resolved}", None)
+    return resolved
+    return p
+
+
 
 def _run(cmd, cwd=None):
     try:
@@ -49,7 +77,9 @@ def _collect_scripts(target):
                 py.append(path)
             elif fn.endswith((".sh", ".bash")):
                 sh.append(path)
-    return py, sh
+        if len(py) + len(sh) >= 500:  # M1: hard cap — same 500-file discipline as the other modules
+            break
+    return py[:500], sh[:500]
 
 
 def check(target, log):
@@ -61,6 +91,7 @@ def check(target, log):
 
     # --- bandit ---
     if py and shutil.which("bandit"):
+        _tool_integrity("bandit", log)
         rc, out, err = _run(["bandit", "-q", "-f", "json", "--", *[_safe_arg(p) for p in py]])
         if out:
             try:
@@ -72,14 +103,18 @@ def check(target, log):
                     if r.get("test_id") in DANGEROUS:
                         sev = "HIGH"
                     log(sev, f"bandit [{r.get('test_id')}]: {r.get('test_name')}: {r.get('issue_text')}",
-                        os.path.relpath(r.get("filename", "?"), target), r.get("line_number"))
+                        _safe_relpath(target, r.get("filename", "?")), r.get("line_number"))
             except json.JSONDecodeError:
                 log("LOW", "bandit ran but output unparseable", None)
     elif py:
-        log("INFO", "python scripts present but bandit unavailable — incomplete scan", None)
+        # H3: missing analyzers must visibly degrade the verdict, not silently pass
+        log("MEDIUM", "python scripts present but no python analyzer (bandit) on this host — "
+            "code-level audit not performed; verdict may be optimistic", None)
+        _baseline_py(target, py, log)
 
     # --- gitleaks: hardcoded secrets in ANY file (200+ secret rules) ---
     if shutil.which("gitleaks"):
+        _tool_integrity("gitleaks", log)
         fd, report = tempfile.mkstemp(suffix=".json")
         os.close(fd)
         try:
@@ -99,6 +134,7 @@ def check(target, log):
 
     # --- shellcheck ---
     if sh and shutil.which("shellcheck"):
+        _tool_integrity("shellcheck", log)
         rc, out, _ = _run(["shellcheck", "-f", "json", "--", *[_safe_arg(os.path.relpath(p, target)) for p in sh]], cwd=target)
         if out:
             try:
@@ -113,6 +149,7 @@ def check(target, log):
 
     # --- semgrep (no config: defaults + p/owasp rules would need network; run bare) ---
     if (py or sh) and shutil.which("semgrep"):
+        _tool_integrity("semgrep", log)
         rc, out, err = _run(["semgrep", "--config", "auto", "--json", "--quiet", "--", _safe_arg(target)])
         if out:
             try:
@@ -120,7 +157,7 @@ def check(target, log):
                 for r in data.get("results", []):
                     sev = {"ERROR": "HIGH", "WARNING": "MEDIUM", "INFO": "LOW"}.get(r.get("extra", {}).get("severity", "INFO"), "LOW")
                     log(sev, f"semgrep [{r.get('check_id')}]: {r.get('extra', {}).get('message', '')}",
-                        os.path.relpath(r.get("path", "?"), target), r.get("start", {}).get("col"))
+                        _safe_relpath(target, r.get("path", "?")), r.get("start", {}).get("col"))
             except json.JSONDecodeError:
                 pass
         if rc == 124:
@@ -134,15 +171,58 @@ def check(target, log):
             reqs = p
             break
     if reqs and shutil.which("pip-audit"):
-        rc, out, err = _run(["pip-audit", "--no-deps", "--disable-pip", "-r", _safe_arg(reqs)])
+        _tool_integrity("pip-audit", log)
+        rc, out, err = _run(["pip-audit", "--no-deps", "--disable-pip", "-r", _safe_arg(reqs), "--format", "json"])
         if rc == 124:
             log("MEDIUM", "pip-audit timed out — dependency scan incomplete", "requirements.txt")
-        # pip-audit prints the summary to stderr, the row table to stdout
-        summary = next((l for l in err.splitlines() if "known vulnerabilities" in l), "")
-        if summary and "Found 0" not in summary:
-            n_rows = sum(1 for l in out.splitlines() if any(k in l for k in ("PYSEC", "CVE-", "GHSA")))
-            log("HIGH", f"pip-audit: {summary.strip()} ({n_rows} vulnerable pins) — see report rows", "requirements.txt")
-        elif rc == 0:
-            log("INFO", "pip-audit: no known-vulnerability findings", "requirements.txt")
+        parsed_json = False
+        try:  # M4: structured parsing first; scraping stderr for literal strings is brittle
+            data = json.loads(out)
+            parsed_json = True
+            vulns = []
+            for dep in data if isinstance(data, list) else []:
+                for v in dep.get("vulns", []) or []:
+                    vulns.append(f"{dep.get('name','?')} {dep.get('version','?')}: {v.get('id', '?')}")
+            if vulns:
+                log("HIGH", f"pip-audit: {len(vulns)} known-vulnerabilit" + ("y" if len(vulns) == 1 else "ies")
+                    + " in pinned dependencies: " + ", ".join(vulns[:10]), "requirements.txt")
+            else:
+                log("INFO", "pip-audit: no known-vulnerability findings", "requirements.txt")
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass  # old pip-audit without --format json: fall back to the scrape below
+        if not parsed_json:
+            summary = next((l for l in err.splitlines() if "known vulnerabilities" in l), "")
+            if summary and "Found 0" not in summary:
+                n_rows = sum(1 for l in out.splitlines() if any(k in l for k in ("PYSEC", "CVE-", "GHSA")))
+                log("HIGH", f"pip-audit: {summary.strip()} ({n_rows} vulnerable pins) — see report rows", "requirements.txt")
+            elif rc == 0:
+                log("INFO", "pip-audit: no known-vulnerability findings", "requirements.txt")
     elif reqs:
         log("INFO", "requirements.txt present but pip-audit unavailable — dependency scan skipped", None)
+
+
+def _baseline_py(target, py, log):
+    """H3 built-in baseline (stdlib ast only, runs when bandit is unavailable):
+    eval/exec with non-constant args, subprocess shell=True. Deterministic,
+    no analyzer install required — dangerous code can no longer score EXCELLENT
+    just because the host lacks tools."""
+    import ast
+    for path in py:
+        rel = _safe_relpath(target, path)
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                tree = ast.parse(fh.read())
+        except (SyntaxError, ValueError, OSError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                fname = getattr(node.func, "id", None)
+                if fname in ("eval", "exec"):
+                    arg = node.args[0] if node.args else None
+                    if not isinstance(arg, ast.Constant):
+                        log("HIGH", f"built-in check: {fname}() called with a non-literal argument — "
+                            f"possible dynamic code execution", rel, getattr(node, "lineno", None))
+                if fname == "check_call" or (isinstance(node.func, ast.Attribute) and node.func.attr in ("run", "Popen", "call", "check_output", "check_call")):
+                    for kw in node.keywords:
+                        if kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                            log("HIGH", "built-in check: subprocess shell=True — shell-injection risk", rel, getattr(node, "lineno", None))

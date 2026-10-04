@@ -41,6 +41,7 @@ def main():
     target = os.path.realpath(args.target)
     if not os.path.isdir(target):
         sys.exit(f"error: target folder not found: {args.target}")
+    json_failed = False  # L11: report-write failure must not erase the DO-NOT-INSTALL signal
 
     n = 0  # zip-bomb-ish cap, counted iteratively so a huge tree can't freeze the tool
     for _r, _d, files in os.walk(target):
@@ -104,6 +105,7 @@ def main():
         "counts": {s: sum(1 for f in findings if f["severity"] == s)
                    for s in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]},
         "findings": findings,
+        "partial": bool(n > MAX_FILES),
     }
 
     order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
@@ -122,7 +124,7 @@ def main():
                 json.dump(report, fh, indent=2)
         except OSError as e:
             print(f"\nerror: could not write JSON report to {args.json_out}: {e}")
-            sys.exit(1)
+            json_failed = True
         print(f"\nJSON report written to {args.json_out}")
 
     if args.badge_out:
@@ -156,7 +158,10 @@ def main():
             else:
                 print("\n--fix (dry-run): no safe mechanical fixes available")
 
-    sys.exit(2 if report["do_not_install"] else 0)  # CI contract: 0 = pass, 2 = do-not-install
+    # CI contract: 0 = pass, 2 = do-not-install, 1 = tool/config error.
+    # DNI keeps priority over a failed report write (L11): an automation reading
+    # exit codes still sees the security signal.
+    sys.exit(2 if report["do_not_install"] else (1 if json_failed else 0))
 
 
 if __name__ == "__main__":

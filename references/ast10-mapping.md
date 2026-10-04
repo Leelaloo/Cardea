@@ -1,6 +1,6 @@
-# OWASP Agentic Skills Top 10 (AST10) → Skill Doctor Coverage
+# OWASP Agentic Skills Top 10 (AST10) → Cardea Coverage
 
-| AST10 Category | Skill Doctor Check |
+| AST10 Category | Cardea Check |
 |---|---|
 | AST01 Malicious Skills | injection.py (instruction-override, persona hijack patterns) |
 | AST02 Supply Chain | security.py (pip-audit on requirements.txt) |
@@ -13,4 +13,4 @@ Severity alignment: CRITICAL findings map to the AST01/03/05 categories that Sny
 research found in 36% of scanned skills (Feb 2026) — treat them as "do not install" signals.
 
 Known limits (honest scope): static analysis cannot catch all semantic backdoors; a clean
-Skill Doctor report means "no known dangerous patterns found", not a cryptographic guarantee.
+Cardea report means "no known dangerous patterns found", not a cryptographic guarantee.

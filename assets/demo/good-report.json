@@ -1,0 +1,33 @@
+{
+  "target": "good-skill",
+  "score": 98,
+  "band": "EXCELLENT",
+  "do_not_install": false,
+  "counts": {
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "MEDIUM": 0,
+    "LOW": 1,
+    "INFO": 2
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "message": "package contents: SKILL.md, references, scripts",
+      "file": null,
+      "line": null
+    },
+    {
+      "severity": "LOW",
+      "message": "no LICENSE file \u2014 marketplaces and buyers expect one",
+      "file": null,
+      "line": null
+    },
+    {
+      "severity": "INFO",
+      "message": "injection scan: 3 text files inspected",
+      "file": null,
+      "line": null
+    }
+  ]
+}

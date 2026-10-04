@@ -8,17 +8,17 @@
   <img alt="License: Source-Available" src="https://img.shields.io/badge/license-source--available-B5563A?style=flat-square">
   <img alt="Python 3 standard library only" src="https://img.shields.io/badge/python-3%20stdlib%20only-20201E?style=flat-square">
   <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-zero-2D6A4F?style=flat-square">
-  <img alt="46 checks" src="https://img.shields.io/badge/checks-46-20201E?style=flat-square">
-  <img alt="Self-scan 96/100" src="https://img.shields.io/badge/self--scan-96%2F100%20EXCELLENT-2D6A4F?style=flat-square">
+  <img alt="80+ checks" src="https://img.shields.io/badge/checks-80%2B-20201E?style=flat-square">
+  <img alt="Self-scan 94/100" src="https://img.shields.io/badge/self--scan-94%2F100%20EXCELLENT-2D6A4F?style=flat-square">
 </p>
 
-Cardea reads a skill the way an attacker would: as files sitting on your disk. Point it at a folder and it runs 46 checks covering structure, broken references, prompt injection and hidden unicode, then hands you a 0-100 score, a findings list with file and line for everything, and if anything critical turns up, a DO NOT INSTALL verdict that no amount of good structure can talk its way out of.
+Cardea reads a skill the way an attacker would: as files sitting on your disk. Point it at a folder and it runs 80+ checks: 40 prompt-injection and obfuscation patterns (English and multilingual, normalized against homoglyph/zero-width tricks), 18 hidden-unicode detectors, structure and spec validation, dead-reference and runtime-breakage checks, plus orchestration of bandit/semgrep/shellcheck/gitleaks/pip-audit when installed, then hands you a 0-100 score, a findings list with file and line for everything, and if anything critical turns up, a DO NOT INSTALL verdict that no amount of good structure can talk its way out of.
 
 ```bash
 python3 scripts/cardea.py <skill-folder>
 ```
 
-It never runs the skill's code. Every finding comes from reading bytes, matching patterns, and handing the files to the static analyzers you already have installed (`bandit`, `semgrep`, `shellcheck`, `gitleaks`, `pip-audit`). Standard-library Python 3, zero dependencies, no API keys, no network. A skill that scores 98 really scored 98, and a skill flagged DO NOT INSTALL has the offending lines printed right there in the report.
+It never runs the skill's code. Every finding comes from reading bytes, matching patterns, and handing the files to the static analyzers you already have installed (`bandit`, `semgrep`, `shellcheck`, `gitleaks`, `pip-audit`). Standard-library Python 3, zero dependencies, no API keys, no network. Verdicts are deterministic: the same skill on the same machine with the same tools scores the same every time, and analyzer availability is recorded in the report, never silently assumed. A skill flagged DO NOT INSTALL has the offending lines printed right there in the report.
 
 Skills are just files anyone can publish, and nothing forces them to be safe or even functional before you install them. In our own Phase 1 audit of the ecosystem, 73% of sampled community skills came back broken or risky. Cardea is the check nobody was running.
 
@@ -59,7 +59,7 @@ Each finding deducts points by severity, with a cap per band so one messy-but-ha
 
 A single CRITICAL also caps the whole score at 49 and sets DO NOT INSTALL, which is the point: a skill that exfiltrates credentials does not get to pass because it also had tidy frontmatter. The scanner exits 0 on a pass and 2 on DO NOT INSTALL, so a CI job can block on it with one line.
 
-Bands: 90-100 EXCELLENT, 70-89 GOOD, 50-69 NEEDS WORK, below 50 BROKEN / RISKY.
+Bands: 90-100 EXCELLENT, 75-89 GOOD, 50-69 NEEDS WORK, below 50 BROKEN / RISKY.
 
 ### A real report
 
@@ -82,7 +82,7 @@ And the malicious skill from the demo video: 0/100, DO NOT INSTALL, 6 CRITICAL, 
 
 ## The honest part
 
-Cardea is static analysis. It never executes target code, so it cannot see what a skill does in a live conversation, and it does not pretend to: our own red-team rounds put its detection coverage at 3 of 5, because rules model skills as files while real attackers model them as conversational flows. We publish that number instead of hiding it. Scores are advisory pre-flight indicators, not guarantees; the install decision is yours. And Cardea scans itself before every release. The current release scores 96/100 EXCELLENT, which is what the badge above says.
+Cardea is static analysis. It never executes target code, so it cannot see what a skill does in a live conversation, and it does not pretend to: our own red-team rounds put its detection coverage at 3 of 5, because rules model skills as files while real attackers model them as conversational flows. We publish that number instead of hiding it. Scores are advisory pre-flight indicators, not guarantees; the install decision is yours. And Cardea scans itself before every release, with the full analyzer set installed (bandit, semgrep, gitleaks). The current release scores 94/100 EXCELLENT — three cosmetic LOWs, no security findings — which is what the badge above says.
 
 ## CI
 
@@ -90,7 +90,7 @@ Cardea is static analysis. It never executes target code, so it cannot see what 
 
 ## Roadmap
 
-The core scanner, the 46-check suite and the DO-NOT-INSTALL gate will never be paywalled. A Publisher Toolkit for people who ship skills for a living (CI action, `--fix` automation, priority threat updates) is coming next, and the check list grows every month, because the threat landscape does not sit still.
+The core scanner, the 80+ check suite and the DO-NOT-INSTALL gate will never be paywalled. A Publisher Toolkit for people who ship skills for a living (CI action, `--fix` automation, priority threat updates) is coming next, and the check list grows every month, because the threat landscape does not sit still.
 
 ## License
 

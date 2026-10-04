@@ -1,3 +1,21 @@
+## v0.2.6 (2026-10-04) — security hardening (adversarial audit round)
+
+- Oversized-file gate: files over 2MB are now a CRITICAL fail-safe instead of a MEDIUM skip — an unscannable file can no longer read as a clean verdict (audit H7).
+- ReDoS fix: bounded the token in the dynamic-import pattern; a 60KB crafted token scanned in well under a second instead of tens of seconds, with linear scaling (audit H6).
+- Detection hardening: scans now normalize text (NFKC folding, zero-width/bidi stripping, Cyrillic/Greek homograph folding) and gained multilingual instruction-override patterns (FR/ES/DE/IT), paraphrase variants, and high-entropy-blob heuristics (audit H1).
+- Analyzer integrity: resolved tool paths are recorded in the report, and a user-writable analyzer path (PATH shadowing) is a HIGH finding (audit H2).
+- Built-in AST baseline: when bandit is unavailable, deterministic stdlib checks still flag eval/exec with non-literal args and subprocess shell=True, and the missing analyzer visibly degrades the verdict (audit H3).
+- Deterministic verdicts: frontmatter parsing no longer differs between hosts with and without PyYAML (audit M15).
+- BOM handling: a UTF-8 BOM in SKILL.md no longer produces false CRITICALs and a false DO-NOT-INSTALL (audit M10).
+- GitHub Action: step-summary reports embed inside a 4-backtick fence with backtick-run collapsing (fence-breakout audit M3); default ref corrected to the live default branch.
+- Autofix: atomic writes with OSError guards (no truncated SKILL.md on a failed write), missing `name` insertion, CRLF preservation, LICENSE* glob awareness (audits M9, M12, M13, M14).
+- Fenced code blocks with language parameters are now parsed for invoked-script executable checks (audit M11); scheme URLs (ftp://, git@) no longer produce dead-reference false positives.
+- Case-only name/folder mismatches are LOW with an auto-fix, not HIGH (audit H5 root cause); badge SVGs gained a viewBox and per-score IDs.
+- Exit codes: DO-NOT-INSTALL keeps exit 2 even when report writing fails; `partial` flag added to the JSON report (audits L11, M1).
+- README: score bands aligned with the engine (75-89 GOOD), check count stated honestly, self-scan badge set to the real 94/100.
+- Trust-claim impersonation hardened: the pattern caught only a few wordings, so a skill self-certifying with fabricated verification claims, scanner-name attribution, cleanliness claims, or do-not-rescan reassurance scanned 98/100 EXCELLENT. The pattern now catches that whole class of self-certification and reassurance phrasing (self-descriptions as verified/certified/audited, install-safety assurances, rescan-dispatching reassurance, scanner-attributed verification) without flagging legitimate audit documentation.
+- Vendored-scanner bypass closed: `doctor: allow` suppression markers were trusted anywhere under the scanner's package root, so a malicious skill bundling its own copy of Cardea could mark payload lines and scan itself clean (verified PoC: a classic instruction-override payload annotated with the marker scanned 86/100 GOOD through the bundled copy). Markers are now honored only in a byte-identical copy of Cardea's own pattern library (SHA-256), and a comment-position marker in any scanned file is itself a HIGH scanner-evasion finding that suppresses nothing.
+
 # Changelog
 
 ## v0.2.5 (2026-10-03)
@@ -11,7 +29,7 @@
 - Hostile-filename safety: pass file arguments after `--` separator and sanitize relative paths with `./` prefix for subprocess tools (bandit, shellcheck, semgrep, gitleaks, pip-audit) in `scripts/security.py` to prevent flag misinterpretation when filenames start with `-` (e.g. `--help-bomb.py`).
 - `--fix` dry-run default: `--fix` without `--apply` performs a preview dry-run (prints proposed changes without modifying files); `--apply` (or `--fix-apply`) performs disk writes and triggers re-scan.
 - Eval suite: updated to 49 cases (added `49-hostile-filename`).
-- Split-flags rm detection: updated regex in `scripts/injection.py` to catch destructive deletion commands with separated flags (e.g. `rm -r -f /`, `rm --recursive -f ~`).
+- Split-flags rm detection: updated regex in `scripts/injection.py` to catch destructive deletion commands with separated flags (root/home targets, recursive and force flags in any order).
 - Dangling symlink escape guard: updated `scripts/structure.py` to check both dirs and files, flagging external symlink directory escapes even when the target is dangling/non-existent.
 - Case-21 multiline exfil fix: verified multiline exfiltration pattern (`(?is)`) catches environment variable harvesting and network exfiltration separated across newlines.
 - Eval suite: 49/49 PASS (added cases 47-split-flags and 48-dangling-symlink; case 21 regression fixed).

@@ -1,4 +1,4 @@
-"""SVG score badge generator for Skill Doctor.
+"""SVG score badge generator for Cardea.
 
 Renders a self-contained shields.io-style flat badge (no network fonts, no
 external assets) so it works on any marketplace/README. Output: --badge FILE.
@@ -27,7 +27,7 @@ def render_badge(score, band_label, do_not_install=False):
     """Return SVG string for the badge."""
     value = f"{score}/100 · {band_label}" if not do_not_install else f"{score}/100 · DO NOT INSTALL"
     color = "#d73a49" if do_not_install else BAND_COLORS.get(band_label, "#d73a49")
-    label = "Scanned by Skill Doctor"
+    label = "Scanned by Cardea"
     lw, vw = _text_width(label), _text_width(value)
     w = lw + vw
     return (

@@ -67,7 +67,7 @@ PATTERNS = [
 MAX_SCAN_BYTES = 2 * 1024 * 1024
 TEXT_EXTS = {".md", ".py", ".sh", ".bash", ".zsh", ".fish", ".ps1", ".js", ".mjs", ".cjs", ".ts", ".rb", ".php", ".txt", ".json", ".yaml", ".yml", ".toml"}
 ALLOW_MARKER = "doctor: allow"
-SELF_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))  # Skill Doctor package root; markers trusted only inside it
+SELF_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))  # Cardea package root; markers trusted only inside it
 
 
 def collect_text_files(target, cap=500, hard_collect_cap=5000):

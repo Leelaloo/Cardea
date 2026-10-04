@@ -1,4 +1,4 @@
-"""Safe auto-remediation for Skill Doctor (--fix).
+"""Safe auto-remediation for Cardea (--fix).
 
 Applies ONLY mechanical, content-preserving fixes. Never rewrites prose,
 never deletes lines, never touches files outside the target folder.
